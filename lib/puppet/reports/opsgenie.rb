@@ -34,7 +34,13 @@ Puppet::Reports.register_report(:opsgenie) do
     request = Net::HTTP::Post.new(uri.request_uri, header)
     request.body = data.to_json
     response = http.request(request)
-    return response
+    case response
+    when Net::HTTPSuccess
+      Puppet.info("POST request to #{api_uri} successful")
+      return response
+    else
+      raise(Puppet::Error, "Unable to make POST request to #{api_uri} #{response.code} #{response.message} #{response.body}")
+    end
   end
 
   def get(api_uri: API_BASE_URI, header: Header, data: {})
@@ -44,32 +50,54 @@ Puppet::Reports.register_report(:opsgenie) do
     request = Net::HTTP::Get.new(uri.request_uri, header)
     request.body = data.to_json unless data.empty?
     response = http.request(request)
-    return response
+    case response
+    when Net::HTTPSuccess
+      Puppet.info("GET request to #{api_uri} successful")
+      return response
+    else
+      # get_alert returns 404 when no alert is found
+      if response.code == '404'
+        response_body = JSON.parse(response.body)
+        Puppet.info(response_body['message'])
+        return response
+      else
+        raise(Puppet::Error, "Unable to make GET request to #{api_uri} #{response.code} #{response.message} #{response.body}")
+      end
+    end
   end
 
   def create_alert(identifier)
-    alert_data = {
-        'message' => "Puppet run for #{self.host} Failed at #{Time.now.asctime}",
-        'alias'   => identifier,
-      }
+    # https://docs.opsgenie.com/docs/alert-api#create-alert
 
-      # https://docs.opsgenie.com/docs/alert-api#create-alert
-      self.post(data: alert_data)
+    Puppet.info("Creating Opsgenie alert for '#{identifier}'")
+
+    alert_data = {
+      'message' => "Puppet run for #{self.host} Failed at #{self.time}",
+      'alias'   => identifier,
+    }
+
+    self.post(data: alert_data)
   end
 
   def get_alert(identifier)
-    encoded_identifier = ERB::Util.url_encode(identifier)
     # https://docs.opsgenie.com/docs/alert-api#get-alert
+
+    Puppet.info("Checking Opsgenie alerts for '#{identifier}'")
+    encoded_identifier = ERB::Util.url_encode(identifier)
+
     self.get(api_uri: "#{API_BASE_URI}/#{encoded_identifier}?identifierType=alias")
   end
 
   def close_alert(identifier)
+    # https://docs.opsgenie.com/docs/alert-api#close-alert
+
+    Puppet.info("Closing Opsgenie alert for '#{identifier}'")
     encoded_identifier = ERB::Util.url_encode(identifier)
+
     close_data = {
-      'note' => "Puppet run for #{self.host} Succeeded at #{Time.now.asctime}"
+      'note' => "Puppet run for #{self.host} Succeeded at #{self.time}"
     }
 
-    # https://docs.opsgenie.com/docs/alert-api#close-alert
     self.post(api_uri: "#{API_BASE_URI}/#{encoded_identifier}/close?identifierType=alias", data: close_data)
   end
 
@@ -82,7 +110,6 @@ Puppet::Reports.register_report(:opsgenie) do
     if status == 'failed' or status == 'undefined' then
 
       create_alert_response = self.create_alert(identifier)
-      Puppet.info("create_alert: #{create_alert_response.body}")
 
     # If the node is successful:
     #  - First check if there is an open alert for the given node.
@@ -91,19 +118,14 @@ Puppet::Reports.register_report(:opsgenie) do
       get_alert_response = self.get_alert(identifier)
 
       case get_alert_response
-        when Net::HTTPSuccess
-          response_body = JSON.parse(get_alert_response.body)
-          # Check if there is an open alert for said node
-          if response_body['data']['status'] == 'open'
-            Puppet.info("Alert open for #{self.host}")
-            # Now that our node is healty close the alert
-            close_alert_response = self.close_alert(identifier)
-            Puppet.info("close_alert: #{close_alert_response.body}")
-          else
-            Puppet.info("No alert currently for #{self.host}")
-          end
-        else
-          Puppet.info("get_alert: #{get_alert_response.body}")
+      when Net::HTTPSuccess
+        response_body = JSON.parse(get_alert_response.body)
+        # Check if there is an open alert for said node
+        if response_body['data']['status'] == 'open'
+          Puppet.info("Found open Opsgenie alert for '#{identifier}'")
+          # Since we found an open alert close it
+          close_alert_response = self.close_alert(identifier)
+        end
       end
     end
   end
