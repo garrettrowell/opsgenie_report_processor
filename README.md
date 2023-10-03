@@ -6,6 +6,11 @@
 1. [Setup](#setup)
 1. [Testing Functionality](#testing-functionality)
 
+## Pre-reqs
+
+* Puppet Enterprise or Open Source Puppet.
+* An [Opsgenie](https://www.atlassian.com/software/opsgenie) account.
+
 ## Description
 
 A Puppet report processor that creates an alert in Opsgenie if an agent fails a puppet run.
@@ -13,16 +18,39 @@ On successful agent runs, Opsgenie is checked for an open Alert. If an alert is 
 
 ## Setup
 
-1. Add this module to your Puppetfile and deploy the code.
-1. On your primary puppet server create `/etc/puppetlabs/puppet/opsgenie.yaml` with the following content (using your own api key):
-    ```yaml
-    api_key: '9r2ku2yc-it85-q4oa-hf22-ahahiq4mphes'
-    ```
-1. On your primary puppet server modify `/etc/puppetlabs/puppet/puppet.conf` so that the `reports` setting includes `opsgenie`. For example:
-    ```yaml
-    [master]
-    reports = puppetdb,opsgenie
-    ```
+### Basic Install and configuration
+
+Add the module to the Puppetfile and deploy the code and configure the Opsgenie api key.
+
+```puppet
+class { 'opsgenie_report_processor':
+  api_key => '########################',
+}
+```
+
+### Configure URI
+
+The default configuration pints to ```https://api.opsgenie.com/v2/alerts```, however in Europe a different endpoint must be specified.
+
+```puppet
+class { 'opsgenie_report_processor':
+  api_key => '########################',
+  api_uri => 'https://api.eu.opsgenie.com/v2'
+}
+```
+
+### Configure the alert levels
+
+By default all alerts will be severity P3, however different alert levels can be configured for production and non-production. Available alert levels are P1, P2, P3 and P4. 
+
+```puppet
+class { 'opsgenie_report_processor':
+  api_key                    => '########################',
+  api_uri                    => 'https://api.eu.opsgenie.com/v2'
+  production_alert_level     => 'P1',
+  non_production_alert_level => 'P2',
+}
+```
 
 ## Testing Functionality
 
