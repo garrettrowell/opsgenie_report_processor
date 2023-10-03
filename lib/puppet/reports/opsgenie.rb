@@ -18,6 +18,8 @@ Puppet::Reports.register_report(:opsgenie) do
 
   API_KEY = config['api_key'] || nil
   API_BASE_URI = config['api_uri'] || 'https://api.opsgenie.com/v2/alerts'
+  PRODUCTION_ALERT_LEVEL = config['production_alert_level'] || 'P3'
+  NON_PRODUCTION_ALERT_LEVEL = config['non_production_alert_level'] || 'P3'
 
   raise(Puppet::Error, "api_key must be set in #{configfile}") if API_KEY.nil?
 
@@ -71,9 +73,16 @@ Puppet::Reports.register_report(:opsgenie) do
 
     Puppet.info("Creating Opsgenie alert for '#{identifier}'")
 
+    if self.environment == "production"
+      priority = PRODUCTION_ALERT_LEVEL
+    else
+      priority = NON_PRODUCTION_ALERT_LEVEL
+    end
+
     alert_data = {
       'message' => "Puppet run for #{self.host} Failed at #{self.time}",
       'alias'   => identifier,
+      'priority' => priority,
     }
 
     self.post(data: alert_data)
