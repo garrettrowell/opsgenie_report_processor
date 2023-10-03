@@ -1,0 +1,17 @@
+<%- | String $api_key,
+      Optional[String] $api_uri,
+      Optional[Enum['P1', 'P2', 'P3', 'P4']] $production_alert_level,
+      Optional[Enum['P1', 'P2', 'P3', 'P4']] $non_production_alert_level,
+| -%>
+# managed by Puppet
+---
+api_key: <%= $api_key %>
+<% if $api_uri { -%>
+api_uri: <%= $api_uri %>
+<% } -%>
+<% if $production_alert_level { -%>
+production_alert_level: <%= $production_alert_level %>
+<% } -%>
+<% if $non_production_alert_level { -%>
+non_production_alert_level: <%= $non_production_alert_level %>
+<% } -%>
